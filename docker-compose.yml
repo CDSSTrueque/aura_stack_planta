@@ -1,0 +1,60 @@
+services:
+  db:
+    image: timescale/timescaledb:latest-pg16
+    container_name: aura_db
+    environment:
+      POSTGRES_USER: ${PG_SUPERUSER}
+      POSTGRES_PASSWORD: ${PG_SUPERPASSWORD}
+      POSTGRES_DB: postgres
+      ODOO_PG_PASSWORD: ${ODOO_PG_PASSWORD}
+      NODERED_PG_PASSWORD: ${NODERED_PG_PASSWORD}
+      DASH_PG_PASSWORD: ${DASH_PG_PASSWORD}
+    # Solo localhost: Node-RED nativo lo alcanza, la red de planta no.
+    # Host 5433 (5432 lo ocupa el contenedor de desarrollo odoo-vm).
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+      - ./backup:/backup
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_SUPERUSER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  odoo:
+    image: odoo:19
+    container_name: aura_odoo
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      HOST: db
+      USER: odoo
+      PASSWORD: ${ODOO_PG_PASSWORD}
+    ports:
+      - "8169:8069"
+    volumes:
+      - odoo-data:/var/lib/odoo
+      - ./odoo/odoo.conf:/etc/odoo/odoo.conf:ro
+      - ./extra-addons:/mnt/extra-addons          # bind: aquí edítas tu módulo
+    restart: unless-stopped
+
+  dash:
+    build: ./dash
+    container_name: aura_dash
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DSN_NODERED: postgresql+psycopg://dash_r:${DASH_PG_PASSWORD}@db:5432/nodered
+      DSN_ODOO:    postgresql+psycopg://dash_r:${DASH_PG_PASSWORD}@db:5432/odoo
+    ports:
+      - "8150:8050"
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  odoo-data:

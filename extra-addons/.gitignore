@@ -1,0 +1,11 @@
+# Ignora TODO el contenido de extra-addons, pero conserva la carpeta en el repo.
+#
+# El truco: la carpeta llega al clon porque este mismo archivo sí se versiona
+# (git no guarda directorios vacíos, solo archivos). La excepción "!.gitignore"
+# es lo que impide que el "*" se ignore a sí mismo.
+#
+# Los módulos viven en su propio repo (aura_odoo_19) y se clonan aparte:
+#   cd extra-addons
+#   git clone git@github.com:<org>/aura_odoo_19.git
+*
+!.gitignore

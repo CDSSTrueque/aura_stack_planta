@@ -383,5 +383,3 @@ Como hacer -u
 
 docker compose run --rm --no-deps odoo odoo -c /etc/odoo/odoo.conf -d odoo -u metallurgy --stop-after-init
 docker compose up -d
-#   a u r a _ s t a c k _ p l a n t a  
- 

@@ -1,0 +1,22 @@
+# --- Secretos -----------------------------------------------------------
+# .env lleva las contraseñas reales de Postgres: nunca se sube.
+# .env.example sí se versiona (es la plantilla) y no lo tapa esta regla.
+.env
+
+# --- Copias locales -----------------------------------------------------
+*.bak
+
+# --- Python -------------------------------------------------------------
+__pycache__/
+*.py[cod]
+.venv/
+
+# --- Editor y sistema operativo -----------------------------------------
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+
+# --- Nota ---------------------------------------------------------------
+# extra-addons/ y backup/ conservan la carpeta pero ignoran su contenido.
+# Esa regla vive en el .gitignore de cada una de esas carpetas.

@@ -1,0 +1,5 @@
+# Misma idea que en extra-addons: la carpeta se conserva, su contenido no.
+# Aquí caen los pg_dump, que no tienen nada que hacer en GitHub.
+# Si la carpeta no existiera, Docker la crearía como root al montarla.
+*
+!.gitignore
