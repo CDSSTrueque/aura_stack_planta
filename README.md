@@ -1,6 +1,6 @@
 # aura_stack
 
-Odoo + Dash + PostgreSQL/TimescaleDB en Docker.
+Odoo + PostgreSQL/TimescaleDB en Docker.
 **Node-RED NO está aquí**: sigue nativo en Windows y se conecta a `localhost:5433`.
 
 ## Puertos
@@ -12,7 +12,6 @@ servicios **corridos**:
 | Servicio | Puerto en el host | Puerto interno |
 |---|---|---|
 | Odoo | 8169 | 8069 |
-| Dash | 8150 | 8050 |
 | Postgres | 5433 (solo `127.0.0.1`) | 5432 |
 
 Los puertos **internos** no cambian: dentro de la red de Compose los servicios
@@ -78,12 +77,13 @@ docker compose config
 docker compose up -d --build
 ```
 
-Construye la imagen de `dash` (es el único con `build:`; los otros dos bajan de
-Docker Hub), crea la red y los volúmenes `pgdata` / `odoo-data`, y arranca los
-tres servicios. `-d` = en segundo plano.
+Construye la imagen de `odoo` (la única con `build:`, ver
+[Driver ODBC](#driver-odbc-para-sql-server); `db` baja de Docker Hub), crea la
+red y los volúmenes `pgdata` / `odoo-data`, y arranca los dos servicios.
+`-d` = en segundo plano.
 
-El orden no es casual: `odoo` y `dash` declaran
-`depends_on: db → condition: service_healthy`, así que esperan a que el
+El orden no es casual: `odoo` declara
+`depends_on: db → condition: service_healthy`, así que espera a que el
 healthcheck (`pg_isready`) dé verde.
 
 La primera vez —y **solo** la primera, con `pgdata` vacío— Postgres ejecuta
@@ -131,7 +131,6 @@ logs antes de tocar nada.
 | Servicio | URL |
 |---|---|
 | Odoo | http://localhost:8169 |
-| Dash | http://localhost:8150 |
 | Postgres | localhost:5433 (solo localhost) |
 
 Odoo tarda 30–60 s en responder la primera vez. Cuando pida base, usar la que ya
@@ -140,7 +139,7 @@ existe: `odoo`.
 ### 6. Instalar el módulo
 
 ```powershell
-docker compose run --rm --no-deps odoo odoo -c /etc/odoo/odoo.conf -d odoo -i aura --stop-after-init
+docker compose run --rm --no-deps odoo odoo -c /etc/odoo/odoo.conf -d odoo -i metallurgy,aura --stop-after-init
 docker compose up -d
 ```
 
@@ -212,7 +211,7 @@ Secuencia completa, borrando datos:
 docker compose down -v
 docker compose up -d --build
 docker compose run --rm --no-deps odoo odoo -c /etc/odoo/odoo.conf -d odoo -i base --stop-after-init
-docker compose run --rm --no-deps odoo odoo -c /etc/odoo/odoo.conf -d odoo -i aura --stop-after-init
+docker compose run --rm --no-deps odoo odoo -c /etc/odoo/odoo.conf -d odoo -i metallurgy,aura --stop-after-init
 docker compose up -d
 ```
 
@@ -227,9 +226,73 @@ docker compose exec db psql -U postgres -c "\l"
 docker compose exec db psql -U postgres -d odoo -c "select name, state from ir_module_module where state != 'uninstalled' and name like 'aura%' or name = 'metallurgy'"
 ```
 
-Tienen que existir las bases `odoo` y `nodered`, los tres contenedores estar
+Tienen que existir las bases `odoo` y `nodered`, los dos contenedores estar
 `Up` (con `db` en `healthy`), y `aura` / `metallurgy` en estado `installed`.
 Si algún módulo queda en `to install`, la instalación se cortó a medias.
+
+## Driver ODBC para SQL Server
+
+El modelo `metallurgy.sql.connection` lee el SQL Server de planta
+(`192.168.15.2\cdosage01`) con **pyodbc**, y ni pyodbc ni el driver de Microsoft
+vienen en la imagen `odoo:19`. Por eso el servicio `odoo` ya no usa esa imagen
+tal cual: se construye desde [`odoo/Dockerfile`](odoo/Dockerfile), que sobre
+`odoo:19` (Ubuntu 24.04) añade el repositorio de Microsoft e instala
+`msodbcsql18`, `unixodbc` y `python3-pyodbc`.
+
+```yaml
+  odoo:
+    build: ./odoo
+    image: aura_odoo:19
+```
+
+El Dockerfile termina con una comprobación, así que si el driver o la librería
+no quedan utilizables **falla el build**, no más tarde dentro de Odoo. Tras
+tocar el Dockerfile:
+
+```powershell
+docker compose build odoo
+docker compose up -d odoo
+```
+
+Comprobar desde dentro del contenedor:
+
+```powershell
+docker compose exec odoo odbcinst -q -d
+docker compose exec odoo python3 -c "import pyodbc; print(pyodbc.version)"
+```
+
+Tiene que salir `[ODBC Driver 18 for SQL Server]` y la versión de pyodbc.
+
+Las credenciales **no van en el código**: se leen de los parámetros de sistema
+`metallurgy.sql_server_username` y `metallurgy.sql_server_password`
+(Ajustes → Técnico → Parámetros del sistema), que `data/metallurgy_sql_connection_data.xml`
+crea con valores de relleno. Hay que cambiarlos antes de usar la conexión.
+
+Nota de red: la instancia es **nombrada** (`\cdosage01`), así que no escucha en
+el 1433 fijo — el puerto lo negocia el SQL Server Browser por UDP 1434. Probar
+con `telnet 192.168.15.2 1433` da "conexión rechazada" aunque todo esté bien;
+la prueba buena es el botón **Probar conexión** de la ficha.
+
+## Nombre del proyecto Compose
+
+`docker-compose.yml` fija `name: aura_stack_planta` en la primera linea.
+No es cosmetico: Compose deriva el nombre del proyecto del nombre de la
+carpeta, y de ese nombre salen los de los volumenes
+(`<proyecto>_pgdata`, `<proyecto>_odoo-data`). Renombrar o mover la carpeta
+sin fijarlo arranca un proyecto nuevo con **volumenes vacios** — Odoo contra
+una base en blanco y los datos viejos huerfanos, sin aviso ninguno.
+
+Ya paso una vez: el stack nacio en `C:/dev/stack_odoo/aura_stack` y al
+renombrar la carpeta a `aura_stack_planta` quedaron dos juegos de volumenes.
+Para saber a que proyecto pertenece un contenedor:
+
+```powershell
+docker inspect aura_db --format "{{index .Config.Labels \"com.docker.compose.project\"}}"
+docker compose config | Select-Object -First 1
+```
+
+Los dos tienen que decir lo mismo. Si no, `docker compose down -v` borrara
+los volumenes del proyecto equivocado.
 
 ## Problemas conocidos
 
@@ -251,8 +314,8 @@ PostgreSQL Database directory appears to contain a database; Skipping initializa
 
 Causa: `PG_SUPERUSER=odoo` en `.env`. El entrypoint de Postgres ya crea ese rol,
 y luego `01-roles-y-bases.sh` intenta crearlo otra vez; con `ON_ERROR_STOP=1` el
-script aborta y **no se crean** las bases `odoo` / `nodered` ni los roles
-`nodered_w` / `dash_r`. El contenedor reinicia, encuentra el volumen ya no vacío
+script aborta y **no se crean** las bases `odoo` / `nodered` ni el rol
+`nodered_w`. El contenedor reinicia, encuentra el volumen ya no vacío
 y salta el init para siempre.
 
 Arreglo: `PG_SUPERUSER=postgres` en `.env`, y `docker compose down -v` para que
@@ -273,17 +336,6 @@ cualquier contraseña, incluso una incorrecta. Las conexiones reales (desde otro
 contenedores o desde Windows por el 5433) llegan de otra IP y sí validan con
 `scram-sha-256`.
 
-### `dash` en bucle de reinicio: `ModuleNotFoundError: No module named 'psycopg2'`
-
-`requirements.txt` instala **psycopg v3**, pero un DSN que empieza por
-`postgresql://` hace que SQLAlchemy cargue psycopg**2**, que no está. Falla al
-crear el engine, antes del `try` de `app.py`.
-
-Arreglo (ya aplicado en `docker-compose.yml`): nombrar el driver en el DSN.
-
-```yaml
-DSN_NODERED: postgresql+psycopg://dash_r:${DASH_PG_PASSWORD}@db:5432/nodered
-```
 
 ### `fe_sendauth: no password supplied` al instalar el módulo
 
@@ -330,7 +382,7 @@ y el contenedor lo ve al instante. Lo que hay que hacer después depende del cam
 |---|---|
 | Solo Python | `docker compose restart odoo` |
 | Vistas XML, campos, modelos nuevos | `docker compose run --rm --no-deps odoo odoo -c /etc/odoo/odoo.conf -d odoo -u aura --stop-after-init` y luego `docker compose up -d` |
-| Instalar el módulo por primera vez | `docker compose run --rm --no-deps odoo odoo -c /etc/odoo/odoo.conf -d odoo -i aura --stop-after-init` |
+| Instalar el módulo por primera vez | `docker compose run --rm --no-deps odoo odoo -c /etc/odoo/odoo.conf -d odoo -i metallurgy,aura --stop-after-init` |
 
 Para actualizar un módulo suelto en vez de todo el bundle, cambiar `-u aura`
 por `-u metallurgy`. Desde Git Bash, anteponer `MSYS_NO_PATHCONV=1`.
@@ -360,6 +412,61 @@ docker compose exec db pg_dump -Fc -U postgres odoo    -f /backup/odoo.dump
 ```
 
 `./backup` está montado en el contenedor. Sincronizar esa carpeta fuera de la PC.
+
+## Llevar el stack a otra PC
+
+Lo que viaja es **el repositorio**, no los volumenes. Docker reconstruye la
+imagen de Odoo y Postgres se inicializa solo.
+
+### Que copiar
+
+| Que | Como | Por que |
+|---|---|---|
+| El repositorio | `git clone` / copiar la carpeta | Todo lo demas sale de aqui |
+| `.env` | **a mano, por un canal seguro** | Esta en `.gitignore`: lleva las contrasenas reales y NO viaja con el repo |
+| `backup/*.dump` | solo si quieres llevarte los datos | Sin esto la PC nueva arranca con una base vacia |
+
+`extra-addons/aura_odoo_19/` tampoco esta versionado en este repo (lo ignora
+`extra-addons/.gitignore`): es un repo propio. En la PC nueva hay que clonarlo
+dentro de `extra-addons/`, o Odoo arrancara sin los modulos.
+
+### Pasos en la PC nueva
+
+```powershell
+cd <carpeta del repo>
+copy .env.example .env      # y poner las contrasenas reales
+docker compose up -d --build
+docker compose run --rm --no-deps odoo odoo -c /etc/odoo/odoo.conf -d odoo -i base --stop-after-init
+docker compose run --rm --no-deps odoo odoo -c /etc/odoo/odoo.conf -d odoo -i metallurgy,aura --stop-after-init
+docker compose up -d
+```
+
+El `--build` no es opcional: `odoo` ya no baja de Docker Hub, se construye
+(ver [Driver ODBC](#driver-odbc-para-sql-server)). La primera vez tarda, baja
+el driver de Microsoft.
+
+### Restaurar los datos en vez de empezar de cero
+
+Entre el `up -d --build` y los `run -i`, con la base `odoo` recien creada y
+vacia:
+
+```powershell
+copy <el dump> backup\odoo.dump
+docker compose exec db pg_restore -U postgres -d odoo --clean --if-exists /backup/odoo.dump
+```
+
+El dump **no incluye el filestore** (adjuntos, imagenes): eso vive en el
+volumen `odoo-data`. Si hacen falta, copiarlo aparte con
+`docker cp aura_odoo:/var/lib/odoo/filestore ...` en la PC vieja.
+
+### Antes de dar el traslado por bueno
+
+- [ ] `odoo/odoo.conf`: cambiar `admin_passwd = cambiar_esto_master`
+- [ ] Parametros `metallurgy.sql_server_username` / `..._password`: siguen en
+      `TU_USUARIO` / `TU_PASSWORD` hasta que alguien los ponga
+- [ ] Que la PC nueva **alcance la red de planta** (`192.168.15.2`): el driver
+      ODBC vive en el contenedor, pero la ruta la pone Windows
+- [ ] Que el puerto 8169 este libre, o cambiarlo en el compose
 
 ## Pendiente
 
