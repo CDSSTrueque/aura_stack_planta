@@ -4,8 +4,8 @@
 # (git no guarda directorios vacíos, solo archivos). La excepción "!.gitignore"
 # es lo que impide que el "*" se ignore a sí mismo.
 #
-# Los módulos viven en su propio repo (aura_odoo_19) y se clonan aparte:
+# Los módulos viven en su propio repo (odoo_aura_plant, rama 20.0) y se clonan aparte:
 #   cd extra-addons
-#   git clone git@github.com:<org>/aura_odoo_19.git
+#   git clone -b 20.0 git@github.com:CDSSTrueque/odoo_aura_plant.git
 *
 !.gitignore

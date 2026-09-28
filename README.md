@@ -489,4 +489,4 @@ volumen `odoo-data`. Si hacen falta, copiarlo aparte con
 Como hacer -u
 
 docker compose run --rm --no-deps odoo odoo -c /etc/odoo/odoo.conf -d odoo -u metallurgy --stop-after-init
-docker compose up -d
+docker compose restart odoo

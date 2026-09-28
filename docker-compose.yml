@@ -30,9 +30,10 @@ services:
     restart: unless-stopped
 
   odoo:
-    # Imagen propia: odoo:19 + driver ODBC 18 + pyodbc (ver odoo/Dockerfile).
+    # Imagen propia: Odoo 20 (receta oficial odoo/docker 20.0) + driver ODBC 18
+    # + pyodbc (ver odoo/Dockerfile). Modulos: extra-addons/odoo_aura_plant.
     build: ./odoo
-    image: aura_odoo:19
+    image: aura_odoo:20
     container_name: aura_odoo
     depends_on:
       db:
