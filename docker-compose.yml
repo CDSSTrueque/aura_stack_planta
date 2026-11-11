@@ -42,14 +42,35 @@ services:
       HOST: db
       USER: odoo
       PASSWORD: ${ODOO_PG_PASSWORD}
-    ports:
-      - "8169:8069"
+    # Sin puertos publicados: solo se entra por Caddy (https://...:8169).
     volumes:
       - odoo-data:/var/lib/odoo
       - ./odoo/odoo.conf:/etc/odoo/odoo.conf:ro
       - ./extra-addons:/mnt/extra-addons          # bind: aquí edítas tu módulo
     restart: unless-stopped
 
+  caddy:
+    # Entrada a Odoo (ver caddy/Caddyfile): http://<IP>:8169 para todos, y
+    # https://planta.aura en las PCs preparadas. Otras apps del servidor se
+    # agregan como nombres nuevos en el Caddyfile, sin abrir mas puertos.
+    image: caddy:2
+    container_name: aura_caddy
+    depends_on:
+      - odoo
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8169:8169"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # La CA interna vive aqui: si se borra, cambia la raiz y hay que
+      # volver a instalarla en cada PC.
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+
 volumes:
   pgdata:
   odoo-data:
+  caddy-data:
+  caddy-config:

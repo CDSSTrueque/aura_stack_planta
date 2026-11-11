@@ -1,0 +1,42 @@
+# Entrada a Odoo.
+#
+#   http://<IP del servidor>:8169   -> Odoo. La que usa todo el mundo: no
+#                                      depende de DNS ni de certificados.
+#   https://planta.aura              -> Odoo con candado. Solo funciona en PCs
+#                                      donde "planta.aura" resuelve y la CA de
+#                                      Caddy es de confianza (ver abajo).
+#
+# Odoo 20 se caia por http (navigator.clipboard solo existe con https); eso lo
+# resuelve aura_utils/static/src/js/clipboard_polyfill.js, no este archivo.
+#
+# Aun asi conviene que Caddy este delante: manda /websocket al servidor
+# gevent de Odoo (8072), que con workers > 0 no atiende el puerto 8069.
+#
+# --- https://planta.aura ---------------------------------------------------
+# Red privada sin dominio publico: "tls internal" firma con la CA propia de
+# Caddy, guardada en el volumen caddy-data. Para cada PC hace falta:
+#   - que planta.aura apunte al servidor: registro en el DNS interno
+#     (TI) o el instalador de cliente/ (archivo hosts);
+#   - confiar en la raiz caddy/aura-root-ca.crt: por GPO (TI) o el mismo
+#     instalador de cliente/.
+# Si la raiz se pierde, se vuelve a sacar con:
+#   docker cp aura_caddy:/data/caddy/pki/authorities/local/root.crt caddy/aura-root-ca.crt
+# Otras apps de este servidor se agregan como otro nombre (https://nodered.aura).
+
+(odoo) {
+	encode gzip
+
+	# Bus / notificaciones en vivo: el servidor gevent de Odoo.
+	reverse_proxy /websocket* odoo:8072
+
+	reverse_proxy odoo:8069
+}
+
+http://:8169 {
+	import odoo
+}
+
+https://planta.aura {
+	tls internal
+	import odoo
+}
