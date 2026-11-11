@@ -138,6 +138,20 @@ RUN set -eux; \
 RUN odbcinst -q -d | grep -q 'ODBC Driver 18 for SQL Server' \
     && python3 -c 'import pyodbc; print("pyodbc", pyodbc.version)'
 
+# ---------------------------------------------------------------------------
+# Agregado Aura: dependencias Python de aura_analysis
+# ---------------------------------------------------------------------------
+# aura_analysis declara numpy/scipy/statsmodels en external_dependencies; sin
+# ellas Odoo no carga el registry. Se instalan con apt (Ubuntu noble bloquea
+# pip sobre el Python del sistema, PEP 668).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        python3-numpy \
+        python3-scipy \
+        python3-statsmodels \
+    && rm -rf /var/lib/apt/lists/* \
+    && python3 -c 'import numpy, scipy, statsmodels; print("numpy", numpy.__version__, "scipy", scipy.__version__, "statsmodels", statsmodels.__version__)'
+
 # Set default user when running the container
 USER odoo
 
