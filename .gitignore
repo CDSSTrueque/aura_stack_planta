@@ -3,8 +3,39 @@
 # .env.example sí se versiona (es la plantilla) y no lo tapa esta regla.
 .env
 
+# --- Certificados y llaves ----------------------------------------------
+# Los genera cada instalacion (la CA interna de Caddy vive en el volumen
+# caddy-data), no son codigo. En una PC nueva se sacan con:
+#   docker cp aura_caddy:/data/caddy/pki/authorities/local/root.crt caddy/aura-root-ca.crt
+# y se copian al lado de cliente/instalar-planta-aura.ps1.
+*.crt
+*.cer
+*.pem
+*.key
+*.pfx
+*.p12
+
+# --- Datos, respaldos y exportaciones -----------------------------------
+# Dumps de Postgres, flujos exportados, comprimidos: datos, no codigo.
+# (backup/ ya ignora todo su contenido; esto cubre los que caigan en otro lado.)
+*.dump
+*.backup
+*.sql.gz
+*.zip
+*.7z
+*.tar
+*.tar.gz
+*.tgz
+
+# --- Logs y temporales --------------------------------------------------
+*.log
+*.tmp
+*.swp
+*~
+
 # --- Copias locales -----------------------------------------------------
 *.bak
+*.orig
 
 # --- Python -------------------------------------------------------------
 __pycache__/
