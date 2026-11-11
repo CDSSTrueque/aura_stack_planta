@@ -20,3 +20,7 @@ desktop.ini
 # --- Nota ---------------------------------------------------------------
 # extra-addons/ y backup/ conservan la carpeta pero ignoran su contenido.
 # Esa regla vive en el .gitignore de cada una de esas carpetas.
+
+# --- Entorno de pruebas (pruebas-odoo.ps1) -------------------------------
+# Worktree del repo de modulos: lo crea y lo borra el script.
+extra-addons-pruebas/

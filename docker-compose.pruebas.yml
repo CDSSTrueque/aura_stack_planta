@@ -1,0 +1,55 @@
+# Odoo de PRUEBAS: una copia de produccion para probar cambios antes de
+# llevarlos a la base real. No se levanta solo: lo maneja pruebas-odoo.ps1.
+#
+#   Produccion  -> contenedor aura_odoo,         base odoo,         http://<IP>:8169
+#   Pruebas     -> contenedor aura_odoo_pruebas, base odoo_pruebas, http://<IP>:8170
+#
+# Comparte el Postgres de produccion (aura_db), pero en otra base, y la misma
+# imagen aura_odoo:20, asi que prueba exactamente lo que va a correr en
+# produccion. Lee los datos de Node-RED en vivo, como produccion: el rol odoo
+# solo tiene SELECT sobre la base nodered, no puede escribir en ella.
+#
+# Proyecto aparte (name) para que "docker compose up/down" de produccion no lo
+# toque nunca, y al reves.
+name: aura_pruebas
+
+services:
+  odoo_pruebas:
+    image: aura_odoo:20
+    container_name: aura_odoo_pruebas
+    environment:
+      HOST: db
+      USER: odoo
+      PASSWORD: ${ODOO_PG_PASSWORD}
+    # Mismo odoo.conf que produccion; estas opciones lo pisan:
+    #   --database / --db-filter  la base de pruebas, nunca la de produccion.
+    #   --workers=0               modo hilos: atiende http y /websocket por el
+    #                             mismo puerto, sin Caddy delante.
+    #   --max-cron-threads=0      ninguna tarea programada corre sola (Telegram,
+    #                             capturas, SQL Server). Se prueban con
+    #                             "Ejecutar manualmente".
+    command:
+      - odoo
+      - --database=odoo_pruebas
+      - --db-filter=^odoo_pruebas$
+      - --workers=0
+      - --max-cron-threads=0
+    ports:
+      - "8170:8069"
+    volumes:
+      - odoo-data:/var/lib/odoo
+      - ./odoo/odoo.conf:/etc/odoo/odoo.conf:ro
+      # Copia de trabajo propia (git worktree), separada de la de produccion.
+      - ./extra-addons-pruebas:/mnt/extra-addons
+    networks:
+      - planta
+    restart: "no"
+
+volumes:
+  odoo-data:
+
+networks:
+  # La red del stack de produccion: ahi vive "db".
+  planta:
+    name: aura_stack_planta_default
+    external: true
